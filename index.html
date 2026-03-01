@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>小五英文默書練習 - 寬畫布版</title>
+    <title>小五英文默書練習</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -19,19 +19,19 @@
             color: #0056b3;
         }
         .container {
-            max-width: 1200px; /* 增加總寬度以適應更寬的畫布 */
+            max-width: 1000px;
             margin: 0 auto;
             background: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            overflow-x: auto; /* 確保窄螢幕可滑動 */
+            overflow-x: auto;
         }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
-            min-width: 900px; /* 增加表格最小寬度 */
+            min-width: 800px;
         }
         th, td {
             border: 2px solid #b3d4fc;
@@ -64,7 +64,7 @@
             gap: 15px;
             justify-content: center;
             align-items: center;
-            flex-wrap: wrap; /* 窄螢幕下換行 */
+            flex-wrap: wrap;
         }
         .word-group {
             display: flex;
@@ -73,7 +73,7 @@
         }
         .canvas-wrapper {
             position: relative;
-            width: 350px; /* --- 已加闊 --- */
+            width: 250px; /* 已將畫布寬度修改為 250px */
             height: 120px; /* 3個40px的間距 = 120px */
             background-color: #fff;
             border-radius: 4px;
@@ -167,14 +167,14 @@
 <body>
 
 <div class="container" id="app-container">
-    <h1>📝 小五英文默書練習 - 寬畫布版</h1>
+    <h1>📝 小五英文默書練習 (Part B: Vocabulary)</h1>
     
     <table id="dictation-table">
         <thead>
             <tr>
                 <th width="5%">題號</th>
                 <th width="15%">工具欄</th>
-                <th width="55%">默寫區 (請在加闊的四線譜內書寫)</th>
+                <th width="55%">默寫區 (請在四線譜內書寫)</th>
                 <th width="25%">正確答案</th>
             </tr>
         </thead>
@@ -221,7 +221,7 @@
 
         currentVocab.forEach((word, index) => {
             const tr = document.createElement('tr');
-            const words = word.split(' '); // 處理雙字詞
+            const words = word.split(' '); // 處理雙字詞 (如 turnip cakes)
 
             // 1. 題號
             let tdNo = `<td style="font-weight:bold; font-size:18px;">${index + 1}</td>`;
@@ -245,7 +245,7 @@
                             <div class="stave-line blue" style="top: 40px;"></div>
                             <div class="stave-line blue" style="top: 80px;"></div>
                             <div class="stave-line red" style="top: 118px;"></div>
-                            <canvas id="canvas-${index}-${wIndex}" class="draw-canvas row-${index}" width="350" height="120"></canvas>
+                            <canvas id="canvas-${index}-${wIndex}" class="draw-canvas row-${index}" width="250" height="120"></canvas>
                         </div>
                         <span id="mark-${index}-${wIndex}" class="mark"></span>
                     </div>
@@ -278,6 +278,7 @@
 
         function getPos(evt) {
             const rect = canvas.getBoundingClientRect();
+            // 支援 touch 和 mouse
             const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
             const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
             return {
@@ -326,8 +327,8 @@
     function playAudio(text) {
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-GB';
-            utterance.rate = 0.8;
+            utterance.lang = 'en-GB'; // 英式發音較符合香港教學
+            utterance.rate = 0.8; // 稍微放慢方便聆聽
             window.speechSynthesis.speak(utterance);
         } else {
             alert("你的瀏覽器不支援語音功能。");
@@ -344,13 +345,113 @@
         canvases.forEach(canvas => {
             const ctx = canvas.getContext('2d');
             if (tool === 'pen') {
-                ctx.globalCompositeOperation = 'source-over';
+                ctx.globalCompositeOperation = 'source-over'; // 畫圖
                 ctx.lineWidth = 4;
             } else if (tool === 'eraser') {
-                ctx.globalCompositeOperation = 'destination-out';
-                ctx.lineWidth = 25;
+                ctx.globalCompositeOperation = 'destination-out'; // 擦除 (不會影響底層 CSS 四線譜)
+                ctx.lineWidth = 25; // 膠擦大一點
             }
         });
     }
 
-    //
+    // 次序打亂
+    function shuffleWords() {
+        for (let i = currentVocab.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [currentVocab[i], currentVocab[j]] = [currentVocab[j], currentVocab[i]];
+        }
+        initApp();
+    }
+
+    // AI 自動批改
+    async function gradeDictation() {
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('feedback').style.display = 'none';
+        
+        let totalScore = 0;
+        const worker = await Tesseract.createWorker('eng');
+
+        for (let i = 0; i < currentVocab.length; i++) {
+            const word = currentVocab[i];
+            const parts = word.split(' ');
+            let isRowCorrect = true;
+
+            // 顯示正確答案
+            document.getElementById(`answer-${i}`).classList.remove('answer-hidden');
+
+            for (let j = 0; j < parts.length; j++) {
+                const canvas = document.getElementById(`canvas-${i}-${j}`);
+                const markSpan = document.getElementById(`mark-${i}-${j}`);
+                
+                // 為了提高辨識率，將透明畫布轉為白底黑字圖片
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.fillStyle = '#ffffff';
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                tempCtx.drawImage(canvas, 0, 0);
+
+                try {
+                    const { data: { text } } = await worker.recognize(tempCanvas);
+                    // 移除多餘空白與標點符號，但嚴格保留大小寫作比對
+                    const recognizedText = text.replace(/[^a-zA-Z]/g, '');
+                    const targetText = parts[j].replace(/[^a-zA-Z]/g, '');
+
+                    if (recognizedText === targetText && targetText !== '') {
+                        markSpan.innerHTML = '✅';
+                    } else {
+                        markSpan.innerHTML = '❌';
+                        isRowCorrect = false;
+                    }
+                } catch (error) {
+                    markSpan.innerHTML = '❌';
+                    isRowCorrect = false;
+                }
+            }
+
+            // Part B 共 12 個詞語，每個得 3 分
+            if (isRowCorrect) {
+                totalScore += 3;
+            }
+        }
+
+        await worker.terminate();
+        document.getElementById('loading').style.display = 'none';
+
+        // 顯示回饋與建議
+        const feedbackDiv = document.getElementById('feedback');
+        let feedbackHTML = `<h2 style="color:#0056b3; margin-top:0;">總分: ${totalScore} / 36</h2>`;
+        
+        if (totalScore === 36) {
+            feedbackHTML += `<p style="color:green; font-weight:bold;">🌟 非常出色！你完全掌握了這些詞語，請保持水準！</p>`;
+        } else if (totalScore >= 24) {
+            feedbackHTML += `<p>👍 做得不錯！但還有進步空間。請特別留意被打 ❌ 的地方：<br><b>改善建議：</b>請檢查字母的小寫及大寫是否寫錯（例如 cakes 不可寫成 Cakes）。</p>`;
+        } else {
+            feedbackHTML += `<p>💪 繼續努力！默書需要多加練習。<br><b>改善建議：</b>請多按「🔊」聆聽發音，一邊讀一邊在四線譜上練習正確的字母筆劃及大小寫。</p>`;
+        }
+        
+        feedbackDiv.innerHTML = feedbackHTML;
+        feedbackDiv.style.display = 'block';
+    }
+
+    // 截圖下載功能
+    function takeScreenshot() {
+        const container = document.getElementById('app-container');
+        html2canvas(container, {
+            scale: 2, // 提高截圖清晰度
+            backgroundColor: "#ffffff"
+        }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = '默書成績表.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+
+    // 頁面載入時初始化
+    window.onload = initApp;
+</script>
+
+</body>
+</html>
